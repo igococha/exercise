@@ -7,4 +7,20 @@ The files in this repository implement two stochastic simulators for the SIR mod
 
 The code presented in the following sections can be found in run_sir.R
 
+## Deterministic Model
+
+
+![Deterministic](sir_ode.pdf)
+
+
+## Stochastic Model v1
+
+
+
+
+
+## Stochastic Model v2
+
+
+
 

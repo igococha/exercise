@@ -75,6 +75,7 @@ get_peak <- function(sim.df,tlabel,dem) {
 
 
 ##### generalising #####
+
 make.event <- function(eName,source,deltaList) {
   return(list(name=eName,source=source,deltas=deltaList))
 }
@@ -100,6 +101,8 @@ sir.eRates <- function(state,params,t,dt) {
 events <- sirEvents
 f.eRates <- sir.eRates 
 
+times <- times.sim
+
 stateSize <- length(stateNames)
 numEventTypes <- length(sirEvents)
 
@@ -114,28 +117,37 @@ for (e in events) {
   eName <- e$name
   deltas <- e$deltas
   for(s in names(deltas)) {
-    print(paste("setting delta[",eName,",",s,"] = ",deltas[[s]],sep='')  )
+    # print(paste("setting delta[",eName,",",s,"] = ",deltas[[s]],sep='')  )
     deltaArray[eName,s] <- deltas[[s]]
   }
 }
 
 # one simulation
-state <- state0 ##  OJO: re-arrange using demes order
+state <- state0[stateNames]
 i <- 1
 states <- list()
 states[[i]] <- c(t=times[1], state)
-numEvents <- numeric(numEventTypes)
+numEvents <- numeric(numEventTypes) ## events generated for (t,dt)
+
 for (t in times[-1]) {
    i <- i+1
    dt <- times[i]-times[i-1]
    rates <- f.eRates(state,params,t,dt)
-   for(i in seq_len(length(eventSources))) {
-     eSrc <- eventSources[i]
-     print(paste("rbinom ",state[eSrc],rates[i]))
-     numEvents[i] <- rbinom(1,size=state[eSrc],prob=rates[i])
+   for(j in seq_len(length(eventSources))) {
+     eSrc <- eventSources[j]
+     # print(paste("rbinom ",state[eSrc],rates[i]))
+     numEvents[j] <- rbinom(1,size=state[eSrc],prob=rates[j])
    }
-   state <- state + f(t,dt,state,params)
-   states[[i]] <- c(t=t,state)
+   print(paste("------------ i= ",i))
+   print("rates")
+   print(rates)
+   print(paste("numEvents=",numEvents, " t=",t))
+   totDelta <- colSums(deltaArray * numEvents)
+   print(totDelta)
+   state <- state + totDelta
+   print(paste("state=",state))
+   #state <- state + f(t,dt,state,params)
+   #states[[i]] <- c(t=t,state)
 }
 
 

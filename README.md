@@ -138,7 +138,7 @@ sirDfs2 <- sim.sir2(state0,params,timesSim,nsim=10)
 
 The output has the same format as the previous simulator so the  same commads can be executed to perform similar 'checks'.
 
-The following graph plots the averages of several simulation runs (11, 500, 1000) against the base ODE result:
+The following graph plots the averages of several simulation runs (100, 500, 1000) against the base ODE result:
 
 ![Comparison several runs](sir_cmp_all.png)
 

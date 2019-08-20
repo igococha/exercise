@@ -1,105 +1,130 @@
-load("sir.R")
+source("sir.R")
 
-sir.model <- gen.ode.model(f=sir.ode)
-
-t0=0
-t1=5
-
-times.ode <- seq(t0,t1,by=0.005)
+t0 <- 0
+t1 <- 5
+timesODE <- seq(t0,t1,by=0.005)
 
 params <- c(beta=10,sigma=1)
 state0 <- c(S=1000,I=1,R=0)
 
-sir.df <- sir.model(state=state0,times=times.ode,params=params)
+sir.ode.model <- gen.ode.model(f=sir.ode)
 
-plot_ode <- gen.plot.ode(sir.df)
-print(plot_ode)
+sirODEdf <- sir.ode.model(state=state0,times=timesODE,params=params)
+
+plotODE <- gen.plot.ode(sirODEdf)
+print(plotODE)
+
 
 ## stochastic simulation
 
+dt = 0.01
+timesSim = seq(t0,t1,by=dt)
 
-sir.dt0 <- function(t,dt,state,params) {
- with(as.list(c(state, params)), {
+sim.sir <- gen.simulator(f.dt=sir.dt)
+set.seed(0)
+simDfs <- sim.sir(state0=state0,params=params,times=timesSim,nsim=10)
+
+print( gen.plot.sim(simDfs[[3]]) )
+
+peaksI <- sapply(simDfs,function(simDf) get_peak(simDf,'t','I'))
+badSims <- which(peaksI[2,]<=1)
+badSims
+
+print( gen.plot.sim(simDfs[[9]]) )
+
+simDfs <- simDfs[-badSims]
+
+meanIpeak <- mean(peaksI[2,-badSims])
+meanTpeak <- mean(peaksI[1,-badSims])
+print(c(meanTpeak, meanIpeak))
+
+# averaging over dfs - plot against ODE results
+
+nsims <- length(simDfs)
+avgI <- lapply(seq(length(timesSim)), 
+       function(t) mean(sapply(seq(nsims), function(nsim) simDfs[[nsim]][t,'I'] )))
+approxAvgI <- approx(timesSim,avgI,timesODE)
+
+
+sirCmpDf <- sirODEdf
+sirCmpDf[,'avgI'] <- approxAvgI$y
+
+plotCmp <- gen.plot.ode(sirCmpDf)
+
+#pdf("ode_avg_I.pdf")
+print(plotCmp)
+#dev.off()
+
+########### stochastic simulation two
+source('sir2.R')
+
+stateNames <- c('S','I','R')
+
+sirEvents <- list(
+	  make.event('infection','S', list('I'=1,'S'=-1)),
+	  make.event('recovery', 'I', list('I'=-1,'R'=1))
+	  )
+
+sir.rates.dt <- function(state,params,t,dt) {
+  rates <- numeric(2) # must equal to number of events
+  with(as.list(c(state, params)), {
     N <- S+I+R
-    probSI <- beta*I*dt/N
-    probIR <- sigma*dt
-    flowSI <- rbinom(n=1,size=S,prob=probSI)
-    flowIR <- rbinom(n=1,size=I,prob=probIR)
-    # removed list constructor
-    return(c(-flowSI, flowSI-flowIR, flowIR))
+    return(c( (beta*I/N)*dt, sigma*dt   ))
  })
 }
 
-sim.dt.binomial0 <- function(f,state0,params,times,nsim=1) {
-  res <- as.list(seq_len(nsim))
-  for(sim in seq(nsim)) {
-    state <- state0
-    i <- 1
-    states <- list()
-    states[[i]] <- c(t=times[1], state)
-    for (t in times[-1]) {
-      i <- i+1
-      dt <- times[i]-times[i-1]
-      state <- state + f(t,dt,state,params)
-      states[[i]] <- c(t=t,state)
-    }
-    res[[sim]] <- as.data.frame(do.call(rbind,states))
-  }
-  return(res)
+sim.sir2 <- gen.model.simulator(stateNames,sirEvents,sir.rates.dt)
+
+set.seed(0)
+sirDfs2 <- sim.sir2(state0,params,timesSim,nsim=10)
+
+print(simPlots2[[3]])
+
+peaksI2 <- sapply(sirDfs2,function(simDf) get_peak(simDf,'t','I'))
+badSims2 <- which(peaksI[2,]<=1)
+badSims2
+
+sirDfs2 <- sirDfs2[-badSims2]
+
+meanIpeak2 <- mean(peaksI2[2,-badSims2])
+meanTpeak2 <- mean(peaksI2[1,-badSims2])
+print(c(meanTpeak2, meanIpeak2))
+
+############ plot avg 100, 500, 1000
+
+do.avg <- function(dfs) {
+  peaksI <- sapply(dfs,function(simDf) get_peak(simDf,'t','I'))
+  badSims <- which(peaksI[2,]<=1)
+  dfs <- dfs[-badSims]
+
+  nsims <- length(dfs)
+  avgI <- lapply(seq(length(timesSim)), 
+       function(t) mean(sapply(seq(nsims), function(nsim) dfs[[nsim]][t,'I'] )))
+  approxAvgI <- approx(timesSim,avgI,timesODE)
+  return(approxAvgI)
 }
 
+sirCmpDf <- sirODEdf
 
-dt = 0.01
-times.sim = seq(t0,t1,by=dt)
+set.seed(0)
+sirDfs2 <- sim.sir2(state0,params,timesSim,nsim=100)
+avg2 <- do.avg(sirDfs2)
+sirCmpDf[,'avgI_100'] <- avg2$y
 
+set.seed(0)
+sirDfs2 <- sim.sir2(state0,params,timesSim,nsim=500)
+avg2 <- do.avg(sirDfs2)
+sirCmpDf[,'avgI_500'] <- avg2$y
 
-sim.dfs <- sim.dt.binomial(f.dt=sir.dt,state0=state0,params=params,times=times.sim,nsim=10)
+set.seed(0)
+sirDfs2 <- sim.sir2(state0,params,timesSim,nsim=1000)
+avg2 <- do.avg(sirDfs2)
+sirCmpDf[,'avgI_1000'] <- avg2$y
 
+plotCmp <- gen.plot.ode(sirCmpDf)
 
-simplots <- lapply(sim.dfs, function(sim.df) gen.plot.sim(sim.df) )
-
-print(simplots[[3]])
-
-
-peaksI <- sapply(sim.dfs,function(sim.df) get_peak(sim.df,'t','I'))
-
-bad.sims <- which(peaksI[2,]<=1)
-
-bad.sims
-
-sim.dfs <- sim.dfs[-bad.sims]
-
-mean(peaksI[2,-bad.sims])
-
-mean(peaksI[1,-bad.sims])
-
-#
-# averaging over dfs
-#
-
-nsims <- length(sim.dfs)
-avg.I <- lapply(seq(length(times.sim)), 
-       function(t) mean(sapply(seq(nsims), function(nsim) sim.dfs[[nsim]][t,'I'] )))
-
-length(avg.I)
-length(times.sim)
-length(times.ode)
-
-approx.avg.I <- approx(times.sim,avg.I,times.ode)
-
-new.sir.df <- sir.df
-
-new.sir.df[,'avgI'] <- approx.avg.I$y
-
-plot.ode.avg <- gen.plot.ode(new.sir.df)
-
-pdf("ode_avg_I.pdf")
-print(plot.ode.avg)
-dev.off()
-
-
-
-
-
+#pdf("sir_cmp.pdf")
+print(plotCmp)
+#dev.off()
 
 

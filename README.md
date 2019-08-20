@@ -15,11 +15,13 @@ The code presented in the following sections can be found in run_sir.R
 
 ## Stochastic Model v1
 
+![Stochastic Run](sir_sim3.png)
 
-
-
+![ODE vs average](sir_cmp.png)
 
 ## Stochastic Model v2
+
+![Comparison several runs](sir_cmp_all.png)
 
 
 

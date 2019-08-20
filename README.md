@@ -10,7 +10,7 @@ The code presented in the following sections can be found in run_sir.R
 ## Deterministic Model
 
 
-![Deterministic](sir_ode.pdf)
+![Deterministic](sir_ode.png)
 
 
 ## Stochastic Model v1

@@ -103,9 +103,42 @@ print(plotCmpI)
 
 ![ODE vs average](sir_cmp.png)
 
-
+The averages of the peak times and vules for I are 1.522 and 680.33, respectively.
 
 ## Stochastic Model v2
+
+After coding our first SIR simulator we have noted that in order to implement a more general function we need to define our stochastic model by specifying:
+* The compartments of the model
+* The events the govern the dynamics of the system in terms of the rates at which they occur, and the changes to the system they trigger.
+
+Event types a created by calling the  `make_event` function. It requires three pieces of information: the event's name, the source of the event and changes to the system (state) that the ocurrence of a single event will trigger. Our SIR model requires the following event types:
+```
+stateNames <- c('S','I','R')
+sirEvents <- list(
+	  make.event('infection','S', list('I'=1,'S'=-1)),
+	  make.event('recovery', 'I', list('I'=-1,'R'=1))
+	  )
+```
+Note that there's no information describing the event rates - we found it more convinient to group the calculation of all event rates in a single rates function (though single functions could've been created for each):
+```
+sir.rates.dt <- function(state,params,t,dt) {
+  rates <- numeric(2) # must equal to number of events
+  with(as.list(c(state, params)), {
+    N <- S+I+R
+    return(c( (beta*I/N)*dt, sigma*dt   ))
+ })
+}
+```
+The stochastic model simulator is created, and executed  as follows:
+```
+sim.sir2 <- gen.model.simulator(stateNames,sirEvents,sir.rates.dt)
+set.seed(0)
+sirDfs2 <- sim.sir2(state0,params,timesSim,nsim=10)
+```
+
+The output has the same format as the previous simulator so the  same commads can be executed to perform similar 'checks'.
+
+The following graph plots the averages of several simulation runs (11, 500, 1000) against the base ODE result:
 
 ![Comparison several runs](sir_cmp_all.png)
 

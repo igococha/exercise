@@ -1,0 +1,344 @@
+---
+title: 'Practical 5: Analysis of point pattern data'
+fontsize: 11pt
+date: "March 18, 2019"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+geometry: margin=1in
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.width=7, fig.height=4)
+```
+
+In this practical we are going to consider a population based case-control study on incident pleural malignant mesotheliomas in the area of Casale Monferrato, diagnosed between 1 January 1987 and 30 June 1993. Casale is a medium-size town in the North-West of Italy where a large asbestos cement (AC) plant was active from 1907 to 1985.
+
+Results from this study were published originally by Magnani et al. 2001. 
+Successively, part of the data were re-analysed within a Bayesian framework by Dreassi et al. 2008.
+The data that you are going to use are related to this re-analysis. 
+
+The study investigates occupational and domestic asbestos exposure in relationship to the largest Italian asbestos cement (AC) factory. In total, 103 cases and 271 controls, are included in the present re-analysis. 
+ 
+The data are stored in a `.RData` file called `data_Casale.RData`. The data.frame `data` includes the following variables:
+
+`case` = cases (1), controls (0)
+
+`sex` = male (1), female (0) 
+
+`abs` = occupational  exposure to AC industry, with (0) non exposed and (1) exposed
+
+`age` = age in years
+
+`dom` = domestic exposure to asbestos material, with (0) non exposed and (1) exposed
+
+`rel` = exposure of any relative, with (0) non exposed and (1) exposed
+
+`x` = x coordinate and `y` = y coordinate
+
+`dist` =  distance from the AC factory, in meters
+
+
+
+# DETAILS OF THE MODEL
+
+In the model, sex (female is the reference level), age (continuous), domestic
+exposure to asbestos material (dom, binary) and occupational (AC)
+exposure of any relatives (rel, binary) are introduced as
+multiplicative terms, while occupational (AC) exposure (asb, binary)
+is introduced as an additive term in the excess risk function. 
+
+The effect of distance is included in the additive term, too. The
+function f(.) describes the decay of risk with increasing
+distance. 
+
+
+The rationale of this modelling choice is that different exposures
+to the same agent sum up (i.e. combine additively, see Breslow,
+1986). The authors considered here the two main risk factors (occupation and
+environmental exposure) in the additive term of the predictor. The
+other covariates are left in the multiplicative term, even if it can
+be argued that for mesotheliomas the only relevant exposure is
+asbestos. For environmental exposure measured by residential
+distance the motivation to choose an additive specification is also
+to ensure that the risk be unchanged at infinite distance from the
+source. 
+
+
+The distance function is obviously not increasing and tends
+asymptotically to zero when distance goes to infinity. The authors specified
+an exponential decay with threshold (see Diggle and Rowlingson, 1994) functional forms for f(.):
+
+`f(d_i)=alpha exp(-beta  d_i^2)`
+
+where alpha is the excess relative risk at source and beta the
+parameter of the exponential decrease function.
+
+
+## Before starting the practical
+
+Organise your work:
+
+* Create a separate subdirectory in your home directory to save your files created during this practical (e.g. "C:/SpatialAnalysis2019/Practicals/Practical5").
+
+* Copy all the files from the blackboard to your subdirectory (created just above). 
+
+* You will use the following R packages: spatstat, dplyr, R2OpenBUGS, mcmcplots.
+
+* If not installed yet, then install the required packages using the function `install.packages()` 
+
+* Then, load needed libraries:
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+library(spatstat)
+library(dplyr)
+library(R2OpenBUGS)  
+library(mcmcplots)    
+```
+
+
+### Data
+
+* Load the data in `R` 
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+load(file="data_Casale.RData")
+```
+
+
+* Print the first rows of the data.frame object `data`
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+head(data)
+```
+
+
+* Produce the summary statistics of these data 
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+summary(data)
+```
+
+
+* Compute the proportion of exposed and unexposed in the study
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+with(data, table(asb)) %>% prop.table()
+```
+
+
+* Compute the number of cases and controls with occupational exposure in the AC factory
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+table(data$case, data$asb)
+```
+
+
+* Compute the number of cases and controls by gender
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+table(data$case, data$sex)
+```
+
+
+* Compute the number of cases and controls with domestic exposure to asbestos material
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+table(data$case, data$dom) 
+```
+
+
+* Compute the number of cases and controls with relatives working in the AC factory
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+table(data$case, data$rel) 
+```
+
+* Compute the average age, and its standard deviation, in cases and controls
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+tapply(data$age, data$case, mean)
+tapply(data$age, data$case, sd)
+```
+
+
+* Compute the average age, and its standard deviation, in males and females
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+tapply(data$age, data$sex, mean)
+tapply(data$age, data$sex, sd)
+```
+
+
+* Compute the distances in km and call the new varaible as `dista`
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+dista <- data$dist/1000 # distances in km
+```
+
+
+* Compute the range (min and max) of the distances 
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+min(dista)
+max(dista)
+```
+
+
+
+* plot the data. We use `spatstat`. A point pattern is represented in `spatstat` by an object of class  `ppp`, that is a planar point pattern. See `help(ppp.object)` for further details.
+
+A `ppp` object includes:
+
+`x`	Vector of x coordinates of data points
+
+`y`	Vector of y coordinates of data points
+
+`window` of observation, an object of class `owin`
+
+...
+
+`marks`, (optional) vector of mark values
+
+
+```{r eval=TRUE, echo=TRUE, message=FALSE}
+# vector of x and y coordinates
+x <- as.vector(data[,7])
+y <- as.vector(data[,8])
+
+# owin: is a window which defines the spatial extent of the ppp object
+# here we create two vectors xrange and yrange for setting the window
+xrange <- range(x, na.rm=T)
+yrange <- range(y, na.rm=T)
+
+W <- owin(xrange,yrange)
+
+# marks (need to be a factor)
+m <- factor(data$case, levels=0:1)
+
+# create a ppp object, specifying the marks
+data.spat = ppp(x, y, window=W, marks=m)
+
+# plot
+plot(data.spat, which.marks = m)
+
+# kernel smoother of point density
+plot(density(data.spat))
+```
+
+
+#### Model with BUGS
+
+* Open and edit the model *Model.txt*. In particular, include statements in your model code to calculate the following quantities (note: revise practical 4 for this):
+
+(a)	the odds ratio associated with `sex`
+
+(b) the odds ratio associated with `age`
+
+(c)	the odds ratio associated with the domestic exposure `dom`
+
+(d) the odds ratio associated with the exposure of relatives `rel`
+
+
+* Now run the model in `OpenBUGS` via `R`. To do so, follow the steps:
+
+1. Prepare the list of data and call it `DataCas`
+
+```{r echo=TRUE, eval=TRUE, include=TRUE}
+DataCas <- list("case"=data$case, "asb"=data$asb,"sex"=data$sex, 
+               "age"=data$age, "rel"=data$rel,"dom"=data$dom,
+               "dista"=dista) 
+```
+
+
+2. Prepare the list of initial values for the model
+
+```{r echo=TRUE, eval=TRUE, include=TRUE}
+inits <- list(
+  list(alpha=2,beta=0, alpha0=0, alphaage=0, alphasex=0, alpharel=0, alphadom=0,
+alphaasb=0), # chain 1
+list(alpha=1,beta=0.1, alpha0=0.1, alphaage=0.1, alphasex=0.1, alpharel=0.1, alphadom=0.1,
+alphaasb=0.1) # chain 2
+)
+```
+
+
+3.	Prepare the set of parameters to be monitored
+
+```{r echo=TRUE, eval=TRUE, include=TRUE}
+parameters <- c("aage","aasb","asex","arel", 
+                "adom","alpha","beta","alpha0","cost")
+```
+
+
+4.	Prepare the MCMC setting. Here, we say we want to run two chains for 10,000 iterations, discarding the first 5,000 values, and thinning the remaining values by 10 (note, the Authors of this study used a very large number of iterations...)
+
+```{r eval=TRUE, echo=TRUE}
+ni <- 10000  # nb iterations 
+nt <- 10    # thinning interval
+nb <- 5000  # nb iterations as burn-in 
+nc <- 2     # nb chains
+```
+
+
+5. Run the model using the function `bugs()`
+
+```{r eval=TRUE, echo=TRUE}
+model.sim <- bugs(data = DataCas, parameters = parameters, 
+                     inits = inits, 
+                     model.file = "Model.txt",
+                     n.chains = nc, n.iter = ni, n.burnin = nb, 
+                     n.thin = nt, debug = FALSE, 
+                     working.directory = getwd(), 
+                     codaPkg = FALSE, summary.only = FALSE,
+                     bugs.seed = 5)
+```
+
+
+* Visualise the main diagnostic plots using `mcmcplot`.
+
+```{r eval=FALSE, echo=TRUE}
+mcmcplot(model.sim)
+```
+
+
+* Compute the Gelman Rubin diagnostic
+
+```{r eval=FALSE, echo=TRUE}
+gelman.diag(model.sim) # Gelman Rubin diagnostic
+```
+
+
+* What do you conclude about the convergenge of the model?
+
+
+* Obtain the posterior summary statistics of the parameters monitored 
+
+```{r eval=TRUE, echo=TRUE, include=TRUE}
+print(model.sim, digits = 2)
+```
+
+
+* What is the risk of mesothelioma in relationship to occupational exposure  in the AC factory? Report the estimated OR and the associate 95% credible interval
+
+ANSWER:
+OR = 26.29 (95%CI 9.38 to 53.88)
+
+
+* What is the  risk of mesothelioma in relationship to relatives' occupational exposure in the AC factory? Report the estimated OR and the associate 95% credible interval
+
+ANSWER:
+OR = 1.54 (5%CI 0.70 to 2.97)
+
+
+* What is the  risk of mesothelioma in relationship to domestic exposure from asbestos-containing items? Report the estimated OR and the associate 95% credible intervals
+
+ANSWER:
+OR = 1.43 (5%CI 0.80 to 2.34) 
+
+
+* What is the posterior mean (and 95%CI) of the parameter evaluating the excess  risk  at the source?
+
+ANSWER:
+`alpha` posterior mean = 9.00 (95%CI 4.61 to 14.66)

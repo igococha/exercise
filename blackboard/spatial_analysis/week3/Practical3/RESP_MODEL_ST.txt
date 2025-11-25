@@ -1,0 +1,56 @@
+#Practical 3. A space-time model
+
+#Separable space-time model with no interactions
+
+model
+{
+  for (i in 1 : N) {
+       for (t in 1:T) {
+          O[i,t]  ~ dpois(mu[i,t])
+          log(mu[i,t]) <- log(E[i,t]) + alpha + U[i] +V[i] + xi[t]
+      }
+      V[i] ~ dnorm(0,prec.v)    #  the unstructured random effects 
+      residRR[i] <- exp(U[i] + V[i])    #  the spatial residual RR
+      
+      PP[i] <- step(residRR[i]-1)   #  posterior probability
+  }
+
+# intrinsic CAR prior on spatial random effects
+  U[1:N] ~ car.normal(adj[], weights[], num[], prec.u)
+
+
+# intrinsic CAR prior on temporal random effects
+  xi[1:T] ~ car.normal(adj.tm[], weights.tm[], num.tm[], prec.xi)
+ 
+   # Weight matrix and adjacency matrix corresponding to RW(1) prior
+    
+    for(t in 1:1) {		
+  		weights.tm[t] <- 1;          adj.tm[t] <- t+1;     num.tm[t] <- 1
+    }
+	for(t in 2:(T-1)) {
+          weights.tm[2+(t-2)*2] <- 1;      adj.tm[2+(t-2)*2] <- t-1
+  		weights.tm[3+(t-2)*2] <- 1;       adj.tm[3+(t-2)*2] <- t+1;      num.tm[t] <- 2
+    }
+    for(t in T:T) {		
+  		weights.tm[(T-2)*2 + 2] <- 1;      adj.tm[(T-2)*2 + 2] <- t-1;    num.tm[t] <- 1
+    }
+
+
+# priors:
+  alpha  ~ dflat()                     # improper uniform (-infty, +infty) prior 
+   
+  prec.u ~ dgamma(0.5,0.005)	       # prior on precison of spatial area random effects
+  sigma2.u <- 1/prec.u                 # conditional variance of spatial area random effects
+  prec.v ~ dgamma(1, 0.001)            # prior on precison of unstructured area random effects
+  sigma2.v <- 1/prec.v                 # conditional variance of unstructured area random effects
+  prec.xi ~ dgamma(0.5, 0.005)         # prior on precison of temporal random effects
+  sigma2.xi <- 1/prec.xi               # conditional variance of temporal random effects
+
+# other quantities of interest
+  overallRR <- exp(alpha)                          # overall RR across study region over the 5-year period
+  																								#risks due to spatial effects   
+  for (t in 1:T) {	
+      residRRtm[t] <- exp(xi[t])   #  the temporal residual RR
+  }
+}
+

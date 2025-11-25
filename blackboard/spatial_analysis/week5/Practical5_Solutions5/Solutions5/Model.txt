@@ -1,0 +1,34 @@
+model
+{
+
+for (i in 1:374){
+case[i] ~ dbin(p[i],1) 
+
+
+f[i]<- (1+alphaasb*asb[i]+alpha*exp(-beta*pow(dista[i],2))) 
+							    
+logit(p[i])<- alpha0
++alphaage*age[i]+alphasex*sex[i]+alpharel*rel[i]+alphadom*dom[i]
++log(f[i]) 
+
+}
+
+alpha0 ~ dflat()   
+alphaage ~ dnorm(0.0,0.001)
+alphasex ~ dnorm(0.0,0.001)
+alpharel ~ dnorm(0.0,0.001)
+alphadom ~ dnorm(0.0,0.001)
+
+cost <- exp(alpha0)
+aage <- exp(alphaage)
+asex <- exp(alphasex)
+arel <- exp(alpharel)
+adom <- exp(alphadom)
+
+ 
+alphaasb ~ dnorm(0.0,0.001)I(0,) 
+aasb <- alphaasb
+
+alpha ~ dgamma(9.0,1.0) #  parameter  related  to  the  excess  risk  at the source
+beta  ~ dunif(0.0,3.0)
+}

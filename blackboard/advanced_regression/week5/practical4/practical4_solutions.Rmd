@@ -1,0 +1,314 @@
+---
+title: "Practical 4: Random effects model"
+author: "Verena Zuber, Jelena Besevic,  Alpha Forna, and Saredo Said"
+date: "14/2/2019"
+output: pdf_document
+highlight: tango
+---
+
+
+## Part 1: Linear mixed model: Exam scores from London
+
+The first part of the practical considers exam scores of 3,935 students from 65 schools in Inner London. In particular, we want to find out how the final exam score can be predicted by reading abilities as measured in the London reading (LR) test.
+
+
+```{r message=FALSE, warning=FALSE}
+load("exam.London")
+dim(exam)
+```
+
+Additional covariates of the data are:
+
+- school: 	School ID - a factor
+- schgend: 	School gender - a factor. Levels are ‘mixed’, ‘boys’, and ‘girls’
+- schavg: 	School average of intake score
+- vr: 	Student level Verbal Reasoning (VR) score band at intake - ‘bottom 25%’, ‘mid 50%’, and ‘top 25%’
+- intake: 	Band of  student’s intake score - ‘bottom 25%’, ‘mid 50%’ and ‘top 25%’
+- sex: 	Sex of the student - levels are ‘F’ and ‘M’
+- type: 	School type - levels are ‘Mxd’ and ‘Sngl’
+- student: 	Student id (within school) - a factor
+
+
+Question 1.1
+
+Fit a linear model to test if there is a linear relationship between reading ability and the final exam score and plot a scatterplot of exam score against reading ability.
+
+```{r message=FALSE, warning=FALSE, fig.height =3.5}
+exam.lm = lm(normexam~standLRT, data=exam)
+summary(exam.lm)
+plot(exam$standLRT,exam$normexam, xlab="Reading (LR) test", ylab="Final exam score")
+abline(exam.lm, lwd=2, col="red")
+```
+
+*Reply: There is a linear relationship between reading ability (standardised London reading test) and the final exam score. An increase of 1 in the reading score, increases the final exam score by 0.596474.*
+
+
+Question 1.2
+
+Are there any potential issues with the standard linear model?
+
+*Reply: Yes, this linear model treats all observations as independent and disregards the potential group structure as induced by the school in which the students are studying.*
+
+Question 1.3
+
+Fit a fixed effect model accounting for the effect of schools using the lm() function where you add school (as.factor()) as covariate.
+What is the interpretation of the model and how many additional parameters do we need to estimate?
+
+```{r message=FALSE, warning=FALSE}
+exam.fe = lm(normexam~standLRT+as.factor(school), data=exam)
+coef(exam.fe)
+```
+
+*Reply: Also the fixed effects model finds a linear relationship where the regression coefficient equals 0.560181196. By introducing the factor school as covariate we need to estimate additional to the intercept and the beta regression coefficient another 64 regression parameter, one for each school minus the reference category. In total these are 66 parameters to estimate in a fixed effects model.*
+
+Question 1.4
+
+Now use the function in the lme function in the
+```{r message=FALSE, warning=FALSE}
+library(nlme)
+```
+package to estimate a random effects model with a random intercept depending on the school. What is the interpretation of the fixed effect? How many parameters do we need to estimate compared to the fixed effects model?
+
+```{r message=FALSE, warning=FALSE}
+RandomIntercept = lme(normexam~standLRT,  random = ~1|school, data=exam) 
+summary(RandomIntercept)
+```
+*Reply: There is almost no change in the interpretation of the random effects model, also here the reading ability has a linear relationship with the exam score (beta=0.5641318). We need to estimate two additional parameters, StdDev(Intercept), StdDev(Residual), so in total there are 4 parameters, 62 parameters less than in the fixed effects model.*
+
+Question 1.5
+
+What is the intra-class correlation coefficient for this model (lecture 4, slide 39) and how do you interpret it?
+
+```{r message=FALSE, warning=FALSE}
+std.u = 0.3071927
+std.e = 0.7535887
+rho = std.u^2 / (std.u^2+std.e^2)
+rho
+```
+*Reply: The intra-class correlation coefficient is 0.1424922, which is not strong, but still it should be accounted for.*
+
+
+Question 1.6
+
+Add a random slope depending on school to your model and see if the effect of the fixed effects changes.
+
+```{r message=FALSE, warning=FALSE}
+RandomSlope = lme(fixed=normexam~standLRT, random = ~ 1 + standLRT | school, data = exam) 
+summary(RandomSlope)
+```
+*Reply: No, the strength of the fixed effect of reading ability stays roughly constant with a beta equal to 0.5572344.*
+
+
+Question 1.7
+
+Which of the covariates are individual-level and which are group-level variables? Re-fit your random intercept model adding the group-level variables to the random effects model.
+
+
+```{r message=FALSE, warning=FALSE}
+RandomInterceptCov = lme( normexam~standLRT + schavg + schgend, random = ~ 1 | school, data = exam) 
+summary(RandomInterceptCov)
+```
+*Reply: Group-level covariates are school gender, school average of intake score and school type. We add here the covariates  school gender and  school average of intake score. We find that the  school average of intake score and the effect of being in a girls only school have a significant positive effect. The fixed effect of reading ability (beta=0.5601841) is comparable to other models.*
+
+Question 1.8
+
+Compare the random intercept (Q1.4) and the random intercept and slope model (Q1.5) using the likelihood ratio test and discuss which one has the better model fit.
+
+```{r message=FALSE, warning=FALSE}
+anova(RandomIntercept, RandomSlope)
+```
+*Reply: The random slope model has a better model fit than the random intercept model in all criteria, likelihood ratio (these are nested models, so it is ok to interpret the the likelihood ratio test here), AIC and BIC.*
+
+Question 1.9
+
+Compare the random intercept model (Q1.4) and the one with the additional covariates (Q1.6) using the AIC and BIC (note that those two models are not nested) and discuss which one has the better model fit.
+
+```{r message=FALSE, warning=FALSE}
+anova(RandomIntercept, RandomInterceptCov)
+```
+*Reply: Since the two models are not nested we need to compare them using the AIC and BIC. We find that there is no conclusive improvement when adding the covariates. Using the AIC the covariate model would be better, using the BIC the intercept only model is better.*
+
+
+
+
+
+## Part 2: Linear mixed model: Survival on the Titanic
+
+The sinking of the titanic was one of the greatest disaster in navel history. After colliding with an iceberg, the titanic sank and 1,502 out of 2,224 passengers and crew were killed. The following data set has collected information on n=1,309 of the passengers and their survival.
+
+```{r message=FALSE, warning=FALSE}
+titanic = read.csv("titanic.csv")
+dim(titanic)
+table(titanic$survived)
+```
+The dataset includes:
+
+- survival: Survival (0 = No; 1 = Yes)
+- class: Passenger Class (1 = 1st; 2 = 2nd; 3 = 3rd)
+- name: Name
+- sex: Sex (1=female, 2=male)
+- age: Age
+- sibsp: Number of Siblings/Spouses Aboard
+- parch: Number of Parents/Children Aboard
+- ticket: Ticket Number
+- fare: Passenger Fare
+- cabin: Cabin
+- embarked: Port of Embarkation (C = Cherbourg; Q = Queenstown; S = Southampton)
+- boat: Lifeboat (if survived)
+- body: Body number (if did not survive and body was recovered)
+
+
+For more information on the data and a data challenge called 'Machine Learning from Disaster' see
+
+https://www.kaggle.com/c/titanic
+
+In the following we want to test if the phrase  'women and children first' was adapted for the evacuation of the titanic.
+
+Question 2.1
+
+Since survival is a binary outcome here, use a glm to test if age and sex had an effect on survival.
+```{r message=FALSE, warning=FALSE}
+glm.out = glm(as.factor(survived)~as.factor(sex)+age, family = "binomial", data = titanic)
+summary(glm.out)
+```
+*Reply: We indeed see a worse chance of survival for men, but no effect of age.*
+
+
+Question 2.2
+
+Next step is to account for the passenger class (variable pclass) in a fixed effects model and discuss the implications and difference to the simple model.
+```{r message=FALSE, warning=FALSE}
+glm.out.fixed = glm(as.factor(survived)~as.factor(pclass)+as.factor(sex)+age, 
+ family = "binomial", data = titanic)
+summary(glm.out.fixed)
+```
+*Reply: After accounting for passenger class, we find a significant effect of age. The beta coefficient is negative, which means that there is a better chance for survival for younger passengers. This indicates that we need to take into account the class, in order to see the true effect of age. If we do not account for the passenger class, this might act as a confounder. In the fixed effect we can also interpret the effect of the passenger class, in particular the best survival is seen for the first class, the reference category. The worst chance of survival is for passengers in the third class.*
+
+Question 2.3
+
+Discuss whether to include the passenger class as a fixed or random effect and fit a random effects model with a random intercept depending on passenger class using the glmer() function in the 
+```{r message=FALSE, warning=FALSE}
+library(lme4)
+```
+package.
+
+```{r message=FALSE, warning=FALSE}
+lmm.intercept = glmer(as.factor(survived)~as.factor(sex)+age+(1|pclass), 
+  family = "binomial", data = titanic)
+summary(lmm.intercept)
+```
+*Reply: When fitting a random effects model we do account for potential group structure induced by the passenger class, but we do not estimate the effect of each passenger class per se. There is no easy formula for the intra-class correlation coefficient as for linear outcome. We would need to call a different package (sjstats::icc and package glmmTMB to compute the generalised linear mixed model) to compute it. If we are only interested in the hypothesis 'Women and children first' we can evaluate this using the generalised mixed model. The interpretation of fixed and random effects with respect to the hypothesis is the same, both support an effect of sex and age on survival. Since class has only three categories it would be fine to use the fixed effects model (adding two additional parameters to the model). For comparison, the random intercept model has one additional parameter. In the fixed effects model we can additionally interpret the class specific survival chance.* 
+
+
+Question 2.4
+
+Add a random slope depending on passenger class to your model and compare it with the random intercept only model using a likelihood test.
+```{r message=FALSE, warning=FALSE}
+lmm.slope = glmer(as.factor(survived)~as.factor(sex)+age+(age|pclass), 
+ family = "binomial", data = titanic)
+summary(lmm.slope)
+```
+*Reply: Also the random slope and intercept model supports an effect of both sex and age.*
+```{r message=FALSE, warning=FALSE}
+anova(lmm.intercept, lmm.slope)
+```
+*Reply: When considering random effects model, the random intercept model has a better model fit.*
+
+Question 2.5
+
+How do you explain the difference in results after accounting for passenger class?
+```{r message=FALSE, warning=FALSE, fig.height =3.5}
+boxplot(titanic$age~titanic$pclass)
+```
+
+*Reply:  There is a negative correlation between passenger class and age. Passengers travelling in lower classes were younger than passengers in the first class as shown in the boxplot of age grouped by passenger class.*
+
+
+```{r message=FALSE, warning=FALSE, fig.height =2.5}
+library(ggplot2)
+p = ggplot(titanic, aes(factor(pclass), age))
+p + geom_violin(na.rm = TRUE)
+```
+*As an aside: An alternative for the boxplot is the violin plot, a mixture of a boxplot and a kernel density function. Here it is even more obvious that there were much more young children travelling in class 2 and 3. Especially young children had a good chance for survival. In order to estimate the true effect of age we need to adjust for passenger class (either in a fixed or random effects model). Otherwise the estimate would be confounded since there where few children travelling first class.*
+
+
+
+## Part 3 (optional): Decision trees and random forests: Survival on the Titanic
+
+
+The final part of this practical uses decision trees and random forest to analyse the titanic data. Make sure to have the following two packages 
+```{r message=FALSE, warning=FALSE}
+library(tree)
+library(randomForest)
+```
+installed.
+
+
+Question 3.1
+
+Fit a decision tree on the titanic data using the following predictor matrix including passenger class, sex, age, number of siblings/spouses aboard, and number of parents/children aboard after excluding missing values.
+
+```{r message=FALSE, warning=FALSE}
+x=cbind(titanic$pclass, titanic$sex, titanic$age, titanic$sibsp, titanic$parch)
+rm = which(is.na(titanic$age)==TRUE)
+#alternatively use rm = which(!is.na(titanic$age)==TRUE) or rm = which(is.na(titanic$age)==FALSE)
+x.input = x[-rm,]
+dim(x.input)
+colnames(x.input) = c("pclass", "sex", "age", "sibsp", "parch")
+y.input = as.factor(titanic$survived[-rm])
+table(y.input)
+```
+Use the function tree in the tree package.
+```{r message=FALSE, warning=FALSE, fig.height =4.5}
+tree.out = tree(y.input ~ x.input)
+plot(tree.out)
+text(tree.out)
+```
+
+Question 3.2
+
+What is a concern when fitting a single decision tree?
+
+*Reply: Decision trees are prone to over-fitting. This can be prevented by either cross-validation or performing a random forest approach. *
+
+Question 3.3
+
+Prune your tree using cross-validation (cv.tree) and use the option FUN = prune.misclass for the misclassification rate as criterion. Choose the model with the lowest misclassification error and plot the tree. How do you interpret the decision tree?
+
+```{r message=FALSE, warning=FALSE}
+set.seed(33)
+cv.out = cv.tree(tree.out, FUN=prune.misclass) 
+cv.out
+```
+*Reply: The models with size 6 and 5 have the same missclassification error ($dev=203). We decide to use the smaller model of size 5.*
+
+```{r message=FALSE, warning=FALSE, fig.height =4.5}
+pruned.tree = prune.tree(tree.out, best=5)
+plot(pruned.tree)
+text(pruned.tree)
+```
+
+*Interpretation: The first split is for female on the left and male on the right. For female the next split is passenger class, where class 1 and 2 are predicted to survive. For male the next split is on age, where men older than 9.5 years do not survive and men younger than 9.5 have another split at the variable siblings. Boys with fewer than 3 siblings survived, while boys with more siblings do not survive.*
+
+
+Question 3.4
+
+Finally fit a random forest to the data and look at the variable importance. What was the key variable for survival in the titanic disaster?
+
+```{r message=FALSE, warning=FALSE, fig.height =4}
+rf.out = randomForest(y=y.input, x=x.input)
+varImpPlot(rf.out, main="")
+```
+
+*Reply: The most important variables are sex and age, reinforcing the 'women and children first' hypothesis. Third important variable is passenger class. The other two variables, sibsp (Number of Siblings/Spouses Aboard) and parch (Number of Parents/Children Aboard) seem to have little effect compared to the other variables.*
+
+
+
+
+<!--
+require(knitr)
+require(markdown)
+require(rmarkdown)
+render("practical4_solutions.Rmd")
+-->
+
